@@ -5,7 +5,9 @@
 #include <ctype.h>
 
 #include <sys/stat.h>
+#ifndef WIN32
 #include <dirent.h>
+#endif
 #include "utils.h"
 
 #include "seafile-session.h"
@@ -16,7 +18,7 @@
 #include "common/mq-mgr.h"
 #include "seafile-config.h"
 #include "seafile-object.h"
-
+#include "seafile-error-impl.h"
 #define DEBUG_FLAG SEAFILE_DEBUG_OTHER
 #include "log.h"
 
@@ -95,16 +97,6 @@ convert_repo_list (GList *inner_repos)
 
 #include "sync-mgr.h"
 
-GObject *
-seafile_get_session_info (GError **error)
-{
-    SeafileSessionInfo *info;
-
-    info = seafile_session_info_new ();
-    g_object_set (info, "datadir", seaf->seaf_dir, NULL);
-    return (GObject *) info;
-}
-
 int
 seafile_set_config (const char *key, const char *value, GError **error)
 {
@@ -160,28 +152,6 @@ seafile_set_download_rate_limit (int limit, GError **error)
     return seafile_session_config_set_int (seaf, KEY_DOWNLOAD_LIMIT, limit);
 }
 
-int
-seafile_repo_last_modify(const char *repo_id, GError **error)
-{
-    SeafRepo *repo;
-    int ctime = 0;
-
-    if (!repo_id) {
-        g_set_error (error, SEAFILE_DOMAIN, SEAF_ERR_BAD_ARGS, "Argument should not be null");
-        return -1;
-    }
-
-    repo = seaf_repo_manager_get_repo (seaf->repo_mgr, repo_id);
-    if (!repo) {
-        g_set_error (error, SEAFILE_DOMAIN, SEAF_ERR_BAD_REPO, "No such repository");
-        return -1;
-    }
-
-    ctime = repo->last_modify;
-
-    return ctime;
-}
-
 char *
 seafile_gen_default_worktree (const char *worktree_parent,
                               const char *repo_name,
@@ -210,14 +180,11 @@ seafile_check_path_for_clone (const char *path, GError **error)
 char *
 seafile_clone (const char *repo_id,
                int repo_version,
-               const char *relay_id,
                const char *repo_name,
                const char *worktree,
                const char *token,
                const char *passwd,
                const char *magic,
-               const char *peer_addr,
-               const char *peer_port,
                const char *email,
                const char *random_key,
                int enc_version,
@@ -229,18 +196,13 @@ seafile_clone (const char *repo_id,
         return NULL;
     }
 
-    if (!relay_id || strlen(relay_id) != 40) {
-        g_set_error (error, SEAFILE_DOMAIN, SEAF_ERR_BAD_ARGS, "Invalid peer id");
-        return NULL;
-    }
-
     if (!worktree) {
         g_set_error (error, SEAFILE_DOMAIN, SEAF_ERR_BAD_ARGS,
                      "Worktre must be specified");
         return NULL;
     }
 
-    if (!token || !peer_addr || !peer_port || !email ) {
+    if (!token || !email ) {
         g_set_error (error, SEAFILE_DOMAIN, SEAF_ERR_BAD_ARGS,
                      "Argument can't be NULL");
         return NULL;
@@ -248,12 +210,11 @@ seafile_clone (const char *repo_id,
 
     return seaf_clone_manager_add_task (seaf->clone_mgr,
                                         repo_id, repo_version,
-                                        relay_id,
                                         repo_name, token,
                                         passwd, magic,
-                                        enc_version, random_key,
+                                        enc_version,
+                                        random_key,
                                         worktree,
-                                        peer_addr, peer_port,
                                         email, more_info,
                                         error);
 }
@@ -261,14 +222,11 @@ seafile_clone (const char *repo_id,
 char *
 seafile_download (const char *repo_id,
                   int repo_version,
-                  const char *relay_id,
                   const char *repo_name,
                   const char *wt_parent,
                   const char *token,
                   const char *passwd,
                   const char *magic,
-                  const char *peer_addr,
-                  const char *peer_port,
                   const char *email,
                   const char *random_key,
                   int enc_version,
@@ -280,18 +238,13 @@ seafile_download (const char *repo_id,
         return NULL;
     }
 
-    if (!relay_id || strlen(relay_id) != 40) {
-        g_set_error (error, SEAFILE_DOMAIN, SEAF_ERR_BAD_ARGS, "Invalid peer id");
-        return NULL;
-    }
-
     if (!wt_parent) {
         g_set_error (error, SEAFILE_DOMAIN, SEAF_ERR_BAD_ARGS,
                      "Worktre must be specified");
         return NULL;
     }
 
-    if (!token || !peer_addr || !peer_port || !email ) {
+    if (!token || !email ) {
         g_set_error (error, SEAFILE_DOMAIN, SEAF_ERR_BAD_ARGS,
                      "Argument can't be NULL");
         return NULL;
@@ -299,12 +252,10 @@ seafile_download (const char *repo_id,
 
     return seaf_clone_manager_add_download_task (seaf->clone_mgr,
                                                  repo_id, repo_version,
-                                                 relay_id,
                                                  repo_name, token,
                                                  passwd, magic,
                                                  enc_version, random_key,
                                                  wt_parent,
-                                                 peer_addr, peer_port,
                                                  email, more_info,
                                                  error);
 }
@@ -313,12 +264,6 @@ int
 seafile_cancel_clone_task (const char *repo_id, GError **error)
 {
     return seaf_clone_manager_cancel_task (seaf->clone_mgr, repo_id);
-}
-
-int
-seafile_remove_clone_task (const char *repo_id, GError **error)
-{
-    return seaf_clone_manager_remove_task (seaf->clone_mgr, repo_id);
 }
 
 GList *
@@ -334,8 +279,7 @@ seafile_get_clone_tasks (GError **error)
         task = ptr->data;
         t = g_object_new (SEAFILE_TYPE_CLONE_TASK,
                           "state", clone_task_state_to_str(task->state),
-                          "error_str", clone_task_error_to_str(task->error),
-                          "err_detail", task->err_detail,
+                          "error", task->error,
                           "repo_id", task->repo_id,
                           "repo_name", task->repo_name,
                           "worktree", task->worktree,
@@ -367,14 +311,13 @@ convert_http_task (HttpTxTask *task)
                   "repo_id", task->repo_id,
                   "state", http_task_state_to_str(task->state),
                   "rt_state", http_task_rt_state_to_str(task->runtime_state),
-                  "error_str", http_task_error_str(task->error),
                   NULL);
 
     if (task->type == HTTP_TASK_TYPE_DOWNLOAD) {
         g_object_set (t, "ttype", "download", NULL);
         if (task->runtime_state == HTTP_TASK_RT_STATE_BLOCK) {
-            g_object_set (t, "block_total", (gint64)task->n_files,
-                          "block_done", (gint64)task->done_files,
+            g_object_set (t, "block_total", task->total_download,
+                          "block_done", task->done_download,
                           NULL);
             g_object_set (t, "rate", http_tx_task_get_rate(task), NULL);
         } else if (task->runtime_state == HTTP_TASK_RT_STATE_FS) {
@@ -426,31 +369,6 @@ seafile_get_download_rate(GError **error)
     return seaf->sync_mgr->last_recv_bytes;
 }
 
-
-GObject *
-seafile_get_repo_sync_info (const char *repo_id, GError **error)
-{
-    SyncInfo *info;
-
-    info = seaf_sync_manager_get_sync_info (seaf->sync_mgr, repo_id);
-    if (!info)
-        return NULL;
-
-    SeafileSyncInfo *sinfo;
-    sinfo = g_object_new (SEAFILE_TYPE_SYNC_INFO,
-                          "repo_id", info->repo_id,
-                          "head_commit", info->head_commit,
-                          "deleted_on_relay", info->deleted_on_relay,
-                          "need_fetch", info->need_fetch,
-                          "need_upload", info->need_upload,
-                          "need_merge", info->need_merge,
-                          /* "last_sync_time", info->last_sync_time,  */
-                          NULL);
-
-    return (GObject *)sinfo;
-}
-
-
 GObject *
 seafile_get_repo_sync_task (const char *repo_id, GError **error)
 {
@@ -473,51 +391,18 @@ seafile_get_repo_sync_task (const char *repo_id, GError **error)
         sync_state = "waiting for sync";
     } else {
         sync_state = sync_state_to_str(task->state);
-        if (strcmp(sync_state, "error") == 0 && !info->in_error)
-            sync_state = "synchronized";
     }
 
     SeafileSyncTask *s_task;
     s_task = g_object_new (SEAFILE_TYPE_SYNC_TASK,
                            "force_upload", task->is_manual_sync,
                            "state", sync_state,
-                           "error", sync_error_to_str(task->error),
-                           "err_detail", task->err_detail,
+                           "error", task->error,
                            "repo_id", info->repo_id,
                            NULL);
 
     return (GObject *)s_task;
 }
-
-GList *
-seafile_get_sync_task_list (GError **error)
-{
-    GHashTable *sync_info_tbl = seaf->sync_mgr->sync_infos;
-    GHashTableIter iter;
-    SeafileSyncTask *s_task;
-    GList *task_list = NULL;
-    gpointer key, value;
-
-    g_hash_table_iter_init (&iter, sync_info_tbl);
-    while (g_hash_table_iter_next (&iter, &key, &value)) {
-        SyncInfo *info = value;
-        if (!info->in_sync)
-            continue;
-        SyncTask *task = info->current_task;
-        if (!task)
-            continue;
-        s_task = g_object_new (SEAFILE_TYPE_SYNC_TASK,
-                               "force_upload", task->is_manual_sync,
-                               "state", sync_state_to_str(task->state),
-                               "error", sync_error_to_str(task->error),
-                               "repo_id", info->repo_id,
-                               NULL);
-        task_list = g_list_prepend (task_list, s_task);
-    }
-
-    return task_list;
-}
-
 
 int
 seafile_set_repo_property (const char *repo_id,
@@ -574,18 +459,17 @@ seafile_get_repo_property (const char *repo_id,
 }
 
 int
-seafile_update_repos_server_host (const char *old_host,
-                                  const char *new_host,
+seafile_update_repos_server_host (const char *old_server_url,
                                   const char *new_server_url,
                                   GError **error)
 {
-    if (!old_host || !new_host || !new_server_url) {
+    if (!old_server_url || !new_server_url) {
         g_set_error (error, SEAFILE_DOMAIN, SEAF_ERR_BAD_ARGS, "Argument should not be null");
         return -1;
     }
 
     return seaf_repo_manager_update_repos_server_host(
-        seaf->repo_mgr, old_host, new_host, new_server_url);
+        seaf->repo_mgr, old_server_url, new_server_url);
 }
 
 int
@@ -766,6 +650,12 @@ seafile_get_file_sync_errors (int offset, int limit, GError **error)
     return seaf_repo_manager_get_file_sync_errors (seaf->repo_mgr, offset, limit);
 }
 
+int
+seafile_del_file_sync_error_by_id (int id, GError **error)
+{
+    return seaf_repo_manager_del_file_sync_error_by_id (seaf->repo_mgr, id);
+}
+
 GList*
 seafile_get_repo_list (int start, int limit, GError **error)
 {
@@ -835,7 +725,7 @@ int do_unsync_repo(SeafRepo *repo)
 }
 
 static void
-cancel_clone_tasks_by_account (const char *account_server, const char *account_email)
+cancel_clone_tasks_by_account (const char *account_server_url, const char *account_email)
 {
     GList *ptr, *tasks;
     CloneTask *task;
@@ -844,7 +734,7 @@ cancel_clone_tasks_by_account (const char *account_server, const char *account_e
     for (ptr = tasks; ptr != NULL; ptr = ptr->next) {
         task = ptr->data;
 
-        if (g_strcmp0(account_server, task->peer_addr) == 0
+        if (g_strcmp0(account_server_url, task->server_url) == 0
             && g_strcmp0(account_email, task->email) == 0) {
             seaf_clone_manager_cancel_task (seaf->clone_mgr, task->repo_id);
         }
@@ -854,12 +744,13 @@ cancel_clone_tasks_by_account (const char *account_server, const char *account_e
 }
 
 int
-seafile_unsync_repos_by_account (const char *server_addr, const char *email, GError **error)
+seafile_unsync_repos_by_account (const char *server_url, const char *email, GError **error)
 {
-    if (!server_addr || !email) {
+    if (!server_url || !email) {
         g_set_error (error, SEAFILE_DOMAIN, SEAF_ERR_BAD_ARGS, "Argument should not be null");
         return -1;
     }
+    char *canon_server_url = canonical_server_url (server_url);
 
     GList *ptr, *repos = seaf_repo_manager_get_repo_list(seaf->repo_mgr, -1, -1);
     if (!repos) {
@@ -868,35 +759,29 @@ seafile_unsync_repos_by_account (const char *server_addr, const char *email, GEr
 
     for (ptr = repos; ptr; ptr = ptr->next) {
         SeafRepo *repo = (SeafRepo*)ptr->data;
-        char *addr = NULL;
-        seaf_repo_manager_get_repo_relay_info(seaf->repo_mgr,
-                                              repo->id,
-                                              &addr, /* addr */
-                                              NULL); /* port */
-
-        if (g_strcmp0(addr, server_addr) == 0 && g_strcmp0(repo->email, email) == 0) {
+        if (g_strcmp0(repo->server_url, canon_server_url) == 0 && g_strcmp0(repo->email, email) == 0) {
             if (do_unsync_repo(repo) < 0) {
                 return -1;
             }
         }
-
-        g_free (addr);
     }
 
     g_list_free (repos);
+    g_free (canon_server_url);
 
-    cancel_clone_tasks_by_account (server_addr, email);
+    cancel_clone_tasks_by_account (server_url, email);
 
     return 0;
 }
 
 int
-seafile_remove_repo_tokens_by_account (const char *server_addr, const char *email, GError **error)
+seafile_remove_repo_tokens_by_account (const char *server_url, const char *email, GError **error)
 {
-    if (!server_addr || !email) {
+    if (!server_url || !email) {
         g_set_error (error, SEAFILE_DOMAIN, SEAF_ERR_BAD_ARGS, "Argument should not be null");
         return -1;
     }
+    char *canon_server_url = canonical_server_url (server_url);
 
     GList *ptr, *repos = seaf_repo_manager_get_repo_list(seaf->repo_mgr, -1, -1);
     if (!repos) {
@@ -905,24 +790,17 @@ seafile_remove_repo_tokens_by_account (const char *server_addr, const char *emai
 
     for (ptr = repos; ptr; ptr = ptr->next) {
         SeafRepo *repo = (SeafRepo*)ptr->data;
-        char *addr = NULL;
-        seaf_repo_manager_get_repo_relay_info(seaf->repo_mgr,
-                                              repo->id,
-                                              &addr, /* addr */
-                                              NULL); /* port */
-
-        if (g_strcmp0(addr, server_addr) == 0 && g_strcmp0(repo->email, email) == 0) {
+        if (g_strcmp0(repo->server_url, canon_server_url) == 0 && g_strcmp0(repo->email, email) == 0) {
             if (seaf_repo_manager_remove_repo_token(seaf->repo_mgr, repo) < 0) {
                 return -1;
             }
         }
-
-        g_free (addr);
     }
 
     g_list_free (repos);
+    g_free (canon_server_url);
 
-    cancel_clone_tasks_by_account (server_addr, email);
+    cancel_clone_tasks_by_account (server_url, email);
 
     return 0;
 }
@@ -992,20 +870,30 @@ seafile_generate_magic_and_random_key(int enc_version,
         return NULL;
     }
 
+    gchar salt[65] = {0};
     gchar magic[65] = {0};
     gchar random_key[97] = {0};
 
-    seafile_generate_magic (CURRENT_ENC_VERSION, repo_id, passwd, magic);
-    seafile_generate_random_key (passwd, random_key);
+    if (enc_version >= 3 && seafile_generate_repo_salt (salt) < 0) {
+        return NULL;
+    }
 
+    seafile_generate_magic (enc_version, repo_id, passwd, salt, magic);
+    if (seafile_generate_random_key (passwd, enc_version, salt, random_key) < 0) {
+        return NULL;
+    }
+    
     SeafileEncryptionInfo *sinfo;
     sinfo = g_object_new (SEAFILE_TYPE_ENCRYPTION_INFO,
                           "repo_id", repo_id,
                           "passwd", passwd,
-                          "enc_version", CURRENT_ENC_VERSION,
+                          "enc_version", enc_version,
                           "magic", magic,
                           "random_key", random_key,
                           NULL);
+
+    if (enc_version >= 3)
+        g_object_set (sinfo, "salt", salt, NULL);
 
     return (GObject *)sinfo;
 
@@ -1093,4 +981,10 @@ seafile_shutdown (GError **error)
     seaf_warning ("Got an exit command. Now exiting\n");
     exit(0);
     return 0;
+}
+
+char*
+seafile_sync_error_id_to_str (int error_id, GError **error)
+{
+    return g_strdup(sync_error_id_to_str (error_id));
 }

@@ -319,12 +319,22 @@ compare_file_content (const char *path, SeafStat *st, const unsigned char *ce_sh
         memset (sha1, 0, 20);
         return hashcmp (sha1, ce_sha1);
     } else {
-        if (compute_file_id_with_cdc (path, st, crypt, repo_version,
-                                      CDC_AVERAGE_BLOCK_SIZE,
-                                      CDC_MIN_BLOCK_SIZE,
-                                      CDC_MAX_BLOCK_SIZE,
-                                      sha1) < 0) {
-            return -1;
+        if (seaf->cdc_average_block_size == 0) {
+            if (compute_file_id_with_cdc (path, st, crypt, repo_version,
+                                          CDC_AVERAGE_BLOCK_SIZE,
+                                          CDC_MIN_BLOCK_SIZE,
+                                          CDC_MAX_BLOCK_SIZE,
+                                          sha1) < 0) {
+                return -1;
+            }
+        } else {
+            if (compute_file_id_with_cdc (path, st, crypt, repo_version,
+                                          seaf->cdc_average_block_size,
+                                          seaf->cdc_average_block_size >> 1,
+                                          seaf->cdc_average_block_size << 1,
+                                          sha1) < 0) {
+                return -1;
+            }            
         }
         if (hashcmp (sha1, ce_sha1) == 0)
             return 0;
@@ -347,7 +357,6 @@ build_checkout_path (const char *worktree, const char *ce_name, int len)
 {
     int base_len = strlen(worktree);
     int full_len;
-    char path[SEAF_PATH_MAX];
     int offset;
     SeafStat st;
 
@@ -356,31 +365,32 @@ build_checkout_path (const char *worktree, const char *ce_name, int len)
         return NULL;
     }
 
-    snprintf (path, SEAF_PATH_MAX, "%s/", worktree);
+    GString *path = g_string_new ("");
+
+    g_string_append_printf (path, "%s/", worktree);
 
     /* first create all leading directories. */
     full_len = base_len + len + 1;
     offset = base_len + 1;
     while (offset < full_len) {
         do {
-            path[offset] = ce_name[offset-base_len-1];
+            g_string_append_c (path, ce_name[offset-base_len-1]);
             offset++;
         } while (offset < full_len && ce_name[offset-base_len-1] != '/');
         if (offset >= full_len)
             break;
-        path[offset] = 0;
 
-        if (seaf_stat (path, &st) == 0 && S_ISDIR(st.st_mode))
+        if (seaf_stat (path->str, &st) == 0 && S_ISDIR(st.st_mode))
             continue;
         
-        if (seaf_util_mkdir (path, 0777) < 0) {
-            seaf_warning ("Failed to create directory %s.\n", path);
+        if (seaf_util_mkdir (path->str, 0777) < 0) {
+            g_string_free (path, TRUE);
+            seaf_warning ("Failed to create directory %s.\n", path->str);
             return NULL;
         }
     }
-    path[offset] = 0;
 
-    return g_strdup(path);
+    return g_string_free (path, FALSE);
 }
 
 int
@@ -617,9 +627,10 @@ files_locked_on_windows (struct index_state *index, const char *worktree)
                 mask == 6 ||    /* both added */
                 mask == 3)      /* others removed */
             {
-                if (do_check_file_locked (ce->name, worktree, FALSE))
+                if (do_check_file_locked (ce->name, worktree, FALSE)) {
                     ret = TRUE;
                     break;
+                }
             }
         } else if (ce->ce_flags & CE_UPDATE ||
                    ce->ce_flags & CE_WT_REMOVE) {

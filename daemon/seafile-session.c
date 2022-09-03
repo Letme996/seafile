@@ -3,8 +3,10 @@
 #include "common.h"
 
 #include <stdint.h>
+#ifndef WIN32
 #include <dirent.h>
 #include <unistd.h>
+#endif
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
@@ -413,6 +415,22 @@ seafile_session_prepare (SeafileSession *session)
             seafile_session_config_get_string(session, KEY_PROXY_PASSWORD);
     }
 
+    int block_size = seafile_session_config_get_int(session, KEY_CDC_AVERAGE_BLOCK_SIZE, NULL);
+    if (block_size >= 1024) {
+        session->cdc_average_block_size = block_size;
+    } else if (block_size == -1) {
+        session->cdc_average_block_size = 0;
+    } else {
+        session->cdc_average_block_size = 0;
+        seaf_message ("Block size less than 1KB. Use default block size(8MB).\n");
+    }
+
+    session->disable_block_hash =
+        seafile_session_config_get_bool (session, KEY_DISABLE_BLOCK_HASH);
+    
+    session->hide_windows_incompatible_path_notification =
+        seafile_session_config_get_bool (session, KEY_HIDE_WINDOWS_INCOMPATIBLE_PATH_NOTIFICATION);
+    
     /* Start mq manager earlier, so that we can send notifications
      * when start repo manager. */
     seaf_mq_manager_init (session->mq_mgr);

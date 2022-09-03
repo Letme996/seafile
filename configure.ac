@@ -2,7 +2,7 @@ dnl Process this file with autoconf to produce a configure script.
 
 
 AC_PREREQ(2.61)
-AC_INIT([seafile], [6.2.11], [info@seafile.com])
+AC_INIT([seafile], [8.0.8], [info@seafile.com])
 AC_CONFIG_HEADER([config.h])
 
 AC_CONFIG_MACRO_DIR([m4])
@@ -152,6 +152,7 @@ AC_SUBST(LIB_ICONV)
 
 
 LIBEVENT_REQUIRED=2.0
+LIBEVENT_PTHREADS_REQUIRED=2.0
 GLIB_REQUIRED=2.16.0
 SEARPC_REQUIRED=1.0
 JANSSON_REQUIRED=2.2.1
@@ -187,7 +188,21 @@ PKG_CHECK_MODULES(CURL, [libcurl >= $CURL_REQUIRED])
 AC_SUBST(CURL_CFLAGS)
 AC_SUBST(CURL_LIBS)
 
-AM_PATH_PYTHON([2.6])
+if test "$bwin32" != true; then
+# do not check libevent_pthreads in win32
+PKG_CHECK_MODULES(LIBEVENT_PTHREADS, [libevent_pthreads >= $LIBEVENT_PTHREADS_REQUIRED])
+AC_SUBST(LIBEVENT_PTHREADS_CFLAGS)
+AC_SUBST(LIBEVENT_PTHREADS_LIBS)
+fi
+
+AC_ARG_WITH([python3], [AS_HELP_STRING([--with-python3], [use python3])],
+	[with_python3="yes"],[])
+
+if test "$with_python3" = "yes"; then
+   AM_PATH_PYTHON([3.5])
+else
+   AM_PATH_PYTHON([2.7])
+fi
 
 if test "$bwin32" = true; then
     # set pyexecdir to somewhere like /c/Python26/Lib/site-packages

@@ -5,9 +5,12 @@
 #ifdef WIN32
 #include <windows.h>
 #include <wincrypt.h>
+#include <shellapi.h>
 #endif
 
+#ifndef WIN32
 #include <unistd.h>
+#endif
 #include <stdio.h>
 #include <stdlib.h>
 #include <errno.h>
@@ -17,10 +20,15 @@
 #include <glib.h>
 #include <glib-object.h>
 #include <curl/curl.h>
+#include <event2/thread.h>
 
 #ifdef HAVE_BREAKPAD_SUPPORT
 #include <c_bpwrapper.h>
 #endif // HAVE_BREAKPAD_SUPPORT
+
+#ifdef ENABLE_BREAKPAD
+#include "c_bpwrapper.h"
+#endif // ENABLE_BREAKPAD
 
 #include <searpc.h>
 #include <searpc-named-pipe-transport.h>
@@ -80,9 +88,9 @@ register_rpc_service ()
 
     /* seafile-rpcserver */
     searpc_server_register_function ("seafile-rpcserver",
-                                     seafile_get_session_info,
-                                     "seafile_get_session_info",
-                                     searpc_signature_object__void());
+                                     seafile_sync_error_id_to_str,
+                                     "seafile_sync_error_id_to_str",
+                                     searpc_signature_string__int());
 
     searpc_server_register_function ("seafile-rpcserver",
                                      seafile_get_config,
@@ -156,7 +164,7 @@ register_rpc_service ()
     searpc_server_register_function ("seafile-rpcserver",
                                      seafile_update_repos_server_host,
                                      "seafile_update_repos_server_host",
-                                     searpc_signature_int__string_string_string());
+                                     searpc_signature_int__string_string());
 
     searpc_server_register_function ("seafile-rpcserver",
                                      seafile_disable_auto_sync,
@@ -186,19 +194,15 @@ register_rpc_service ()
     searpc_server_register_function ("seafile-rpcserver",
                                      seafile_clone,
                                      "seafile_clone",
-        searpc_signature_string__string_int_string_string_string_string_string_string_string_string_string_string_int_string());
+        searpc_signature_string__string_int_string_string_string_string_string_string_string_int_string());
     searpc_server_register_function ("seafile-rpcserver",
                                      seafile_download,
                                      "seafile_download",
-        searpc_signature_string__string_int_string_string_string_string_string_string_string_string_string_string_int_string());
+        searpc_signature_string__string_int_string_string_string_string_string_string_string_int_string());
 
     searpc_server_register_function ("seafile-rpcserver",
                                      seafile_cancel_clone_task,
                                      "seafile_cancel_clone_task",
-                                     searpc_signature_int__string());
-    searpc_server_register_function ("seafile-rpcserver",
-                                     seafile_remove_clone_task,
-                                     "seafile_remove_clone_task",
                                      searpc_signature_int__string());
     searpc_server_register_function ("seafile-rpcserver",
                                      seafile_get_clone_tasks,
@@ -220,11 +224,6 @@ register_rpc_service ()
     searpc_server_register_function ("seafile-rpcserver",
                                      seafile_get_repo_sync_task,
                                      "seafile_get_repo_sync_task",
-                                     searpc_signature_object__string());
-
-    searpc_server_register_function ("seafile-rpcserver",
-                                     seafile_get_repo_sync_info,
-                                     "seafile_get_repo_sync_info",
                                      searpc_signature_object__string());
 
     searpc_server_register_function ("seafile-rpcserver",
@@ -268,6 +267,11 @@ register_rpc_service ()
                                      searpc_signature_objlist__int_int());
 
     searpc_server_register_function ("seafile-rpcserver",
+                                     seafile_del_file_sync_error_by_id,
+                                     "seafile_del_file_sync_error_by_id",
+                                     searpc_signature_int__int());
+
+    searpc_server_register_function ("seafile-rpcserver",
                                      seafile_get_sync_notification,
                                      "seafile_get_sync_notification",
                                      searpc_signature_json__void());
@@ -289,7 +293,7 @@ char *b64encode(const char *input)
 {
     char buf[32767] = {0};
     DWORD retlen = 32767;
-    CryptBinaryToString((BYTE*) input, strlen(input), CRYPT_STRING_BASE64 | CRYPT_STRING_NOCRLF, buf, &retlen);
+    CryptBinaryToStringA((BYTE*) input, strlen(input), CRYPT_STRING_BASE64 | CRYPT_STRING_NOCRLF, buf, &retlen);
     return strdup(buf);
 }
 #endif
@@ -300,9 +304,9 @@ start_searpc_server ()
     register_rpc_service ();
 
 #ifdef WIN32
-    DWORD bufCharCount = 32767;
-    char userNameBuf[bufCharCount];
-    if (GetUserName(userNameBuf, &bufCharCount) == 0) {
+    char userNameBuf[32767];
+    DWORD bufCharCount = sizeof(userNameBuf);
+    if (GetUserNameA(userNameBuf, &bufCharCount) == 0) {
         seaf_warning ("Failed to get user name, GLE=%lu, required size is %lu\n",
                       GetLastError(), bufCharCount);
         return -1;
@@ -363,7 +367,7 @@ get_argv_utf8 (int *argc)
 int
 main (int argc, char **argv)
 {
-#ifdef HAVE_BREAKPAD_SUPPORT
+#if defined(HAVE_BREAKPAD_SUPPORT) || defined(ENABLE_BREAKPAD)
 #ifdef WIN32
 #define DUMPS_DIR "~/ccnet/logs/dumps/"
 #else
@@ -473,6 +477,11 @@ main (int argc, char **argv)
 #endif
 #if !GLIB_CHECK_VERSION(2, 31, 0)
     g_thread_init(NULL);
+#endif
+
+#ifndef WIN32
+    /* init multithreading support for libevent.because struct event_base is not thread safe. */
+    evthread_use_pthreads();
 #endif
 
     if (!debug_str)

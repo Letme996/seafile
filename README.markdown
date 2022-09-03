@@ -2,7 +2,6 @@
 
 Seafile is an open source cloud storage system with privacy protection and teamwork features. Collections of files are called libraries. Each library can be synced separately. A library can also be encrypted with a user chosen password. Seafile also allows users to create groups and easily sharing files into groups.
 
-New in 2019: A special edition called [SeafileDocs](https://forum.seafile.com/t/seafiledocs-a-special-edition-of-seafile-that-focus-on-online-document-and-knowledge-management/8192) is available. SeafileDocs provides extra features like online document, review process and Wiki.
 
 ## Feature Summary
 
@@ -58,26 +57,25 @@ Each component of Seafile has its own source code repository on Github.
 * Android app: https://github.com/haiwen/seadroid
 * WebDAV: https://github.com/haiwen/seafdav
 
-Before version 6.0, the source code of "sync client daemon" and "server core" are mixed together in https://github.com/haiwen/seafile.
+Before version 6.0, the source code of "sync client daemon" and "server core" was mixed together in https://github.com/haiwen/seafile.
 But after 6.0 version, the server core is separated into its own repository.
 For this reason, the sync client daemon repository is still the "front page" for Seafile project on Github.
 
 Build and Run
 =============
 
-See <http://manual.seafile.com/build_seafile/server.html>
+See <https://manual.seafile.com/build_seafile/server>
 
 Bug and Feature Request Reports
 ===============================
 
 Please only submit bugs in GitHub issues (Pro customers should contact us via Email):
 
-* Server and Web interface (Seahub): https://github.com/haiwen/seafile/issues
-* Desktop client: https://github.com/haiwen/seafile-client/issues
+* Server, Web interface (Seahub) and desktop clients: https://github.com/haiwen/seafile/issues
 * Android client: https://github.com/haiwen/seadroid/issues
 * iOS client: https://github.com/haiwen/seafile-iOS/issues
 
-Feature requests and installation/usage problem should be asked in the forum https://forum.seafile.com/.
+Feature requests can be made and installation/usage problems can be discussed in the forum https://forum.seafile.com/.
 
 Internationalization (I18n)
 ===========================
@@ -90,7 +88,7 @@ Internationalization (I18n)
 Change Logs
 ===========
 
-See <https://seacloud.cc/group/3/wiki/home/#Roadmap-ChangeLogs>
+See <https://manual.seafile.com/changelog/server-changelog/>
 
 
 Why Open Source
@@ -102,7 +100,7 @@ Our primary goal is to build a first-class product. We think this goal can only 
 Contributing
 ===========
 
-For more informations read [Contribution](http://manual.seafile.com/contribution.html).
+For more information read [Contribution](https://manual.seafile.com/contribution/).
 
 
 License

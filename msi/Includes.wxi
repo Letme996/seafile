@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Include Id="SeafileInclude">
-  <?define CurrentSeafileVersion="6.2.11" ?>
+  <?define CurrentSeafileVersion="8.0.8" ?>
 
   <!-- Update Guid 不能变 -->
   <?define CurrentUpdateGuid="65DED1C8-A5F1-4C49-8E7E-B0A8A5A6535C" ?>
@@ -131,7 +131,27 @@
   <!-- <?define ProductGuid="FABC1D45-7C57-4D03-B136-669F66B8CC62" ?> (6.2.8) -->
   <!-- <?define ProductGuid="4B890A1D-FBC4-427D-AF56-3A4FE393318A" ?> (6.2.9) -->
   <!-- <?define ProductGuid="8F51E7B1-AE22-4AdC-8375-2675595F6D0B" ?> (6.2.10) -->
-  <?define ProductGuid="8284058D-781C-48BC-95C3-9B3146AEFA79" ?>
+  <!-- <?define ProductGuid="8284058D-781C-48BC-95C3-9B3146AEFA79" ?> (6.2.11) -->
+  <!-- <?define ProductGuid="9486761D-9F70-4E8E-AA1B-D460F1EF4F42" ?> (7.0.0) -->
+  <!-- <?define ProductGuid="706266F6-B2C5-4170-9DB1-0F4A586E614F" ?> (7.0.1) -->
+  <!-- <?define ProductGuid="86D3A1B2-E429-4E75-8367-A6907FFAB6E4" ?> (7.0.2) -->
+  <!-- <?define ProductGuid="DA63DC60-BAAD-45CF-B1CF-AECF7CDD8842" ?> (7.0.3) -->
+  <!-- <?define ProductGuid="A88599F1-1D4D-4E7D-AEFD-53EA5CFDF9E7" ?> (7.0.4) -->
+  <!-- <?define ProductGuid="3A3D3777-A5C1-4089-A2F7-33D55A36E41E" ?> (7.0.5) -->
+  <!-- <?define ProductGuid="9A180890-0EED-4E38-BAB0-A6E148D89F4A" ?> (7.0.6) -->
+  <!-- <?define ProductGuid="1E617234-A273-41F9-8BA7-70C6F1644AC4" ?> (7.0.7) -->
+  <!-- <?define ProductGuid="7944DDB5-1C68-4C9F-9FA5-01224493EFF0" ?> (7.0.8) -->
+  <!-- <?define ProductGuid="C54F03E9-9522-4C70-8134-5199BD74AFBA" ?> (7.0.9) -->
+  <!-- <?define ProductGuid="D21D1108-878F-43D9-A3A2-39F4B38A5694" ?> (7.0.10) -->
+  <!-- <?define ProductGuid="CE032912-6DCF-4C5F-A447-AC303D0530A7" ?> (8.0.0) -->
+  <!-- <?define ProductGuid="93B20E38-EFF9-4CD8-BFF4-F0DF21DEADB8" ?> (8.0.1) -->
+  <!-- <?define ProductGuid="8F8A6FBA-EAD1-4B16-B074-03C1BA4E1109" ?> (8.0.2) -->
+  <!-- <?define ProductGuid="82A1C721-6B4E-473B-B515-8D0B9242C6A6" ?> (8.0.3) -->
+  <!-- <?define ProductGuid="B4ACB0CA-854E-4087-B9F5-7382924D7C49" ?> (8.0.4) -->
+  <!-- <?define ProductGuid="02E0FA9C-6C8A-4F87-924B-D33EF51EB9DE" ?> (8.0.5) -->
+  <!-- <?define ProductGuid="7EB8EE37-06D5-4119-84B4-5369AAF20041" ?> (8.0.6) -->
+  <!-- <?define ProductGuid="A1210D1B-4DE1-4A01-85DF-779BE1C10790" ?> (8.0.7) -->
+  <?define ProductGuid="B9B16F5B-BA57-4ABF-B9AC-F40C90D9C03D" ?>
 
   <?define GuidOfCustomComponent="AD201805-3CBD-4834-9097-5D934F7E0000" ?>
   <?define GuidOfAutoStartComponent="AD201805-3CBD-4834-9097-5D934F7E0001" ?>

@@ -21,7 +21,7 @@ import tempfile
 
 FINAL_APP = 'Seafile Client.app'
 FSPLUGIN_APPEX_NAME = 'Seafile FinderSync.appex'
-CERT_ID = '1E9F00CBCF84C2BE8BE2A99A65F30BD5EB4D1E70'
+CERT_ID = '79AB1AF435DD2CBC5FDB3EBBD45B0DA17727B299'
 
 if 'SEAFILE_BUILD_SLAVE' not in os.environ:
     import fabric
@@ -338,7 +338,7 @@ class SeafileClient(Project):
         Project.__init__(self)
         cmake_defines = {
             'CMAKE_OSX_ARCHITECTURES': 'x86_64',
-            'CMAKE_OSX_DEPLOYMENT_TARGET': '10.7',
+            'CMAKE_OSX_DEPLOYMENT_TARGET': '10.9',
             'CMAKE_BUILD_TYPE': 'Release',
             'BUILD_SHIBBOLETH_SUPPORT': 'ON',
             'BUILD_SPARKLE_SUPPORT': 'ON',
@@ -346,7 +346,7 @@ class SeafileClient(Project):
         cmake_defines_formatted = ' '.join(['-D{}={}'.format(k, v) for k, v in cmake_defines.iteritems()])
         self.build_commands = [
             'rm -f CMakeCache.txt',
-            'cmake -G Xcode {}'.format(cmake_defines_formatted),
+            'cmake -GXcode {}'.format(cmake_defines_formatted),
             'xcodebuild -target seafile-applet -configuration Release -jobs {}'.format(NUM_CPU),
             'rm -rf seafile-applet.app',
             'cp -r Release/seafile-applet.app seafile-applet.app',
@@ -857,21 +857,41 @@ def sign_files(appdir):
         'Contents/Frameworks/QtWebEngineCore.framework/Versions/5/Helpers/QtWebEngineProcess.app'
     )
 
+    def _glob(pattern, *a, **kw):
+        return glob.glob(join(appdir, pattern), *a, **kw)
+
     # The webengine app must be signed first, otherwise the sign of
     # QtWebengineCore.framework would fail.
     if exists(webengine_app):
-        do_sign(webengine_app)
+        entitlements = join(Seafile().projdir, 'scripts/build/osx.entitlements')
+        do_sign(
+            webengine_app,
+            extra_args=['--entitlements', entitlements]
+        )
+
+    # Strip the get-task-allow entitlements for Sparkle binaries
+    for fn in _glob('Contents/Frameworks/Sparkle.framework/Versions/A/Resources/Autoupdate.app/Contents/MacOS/*'):
+        do_sign(fn, preserve_entitlemenets=False)
+
+    # Sign the nested contents of Sparkle before we sign
+    # Sparkle.Framework in the thread pool.
+    for fn in (
+            'Contents/Frameworks/Sparkle.framework/Versions/A/Resources/Autoupdate.app',
+            'Contents/Frameworks/Sparkle.framework/Versions/A/Sparkle',
+    ):
+        do_sign(join(appdir, fn))
 
     patterns = [
         'Contents/Frameworks/*.framework',
         'Contents/PlugIns/*/*.dylib',
         'Contents/Frameworks/*.dylib',
         'Contents/Resources/seaf-daemon',
+        'Contents/MacOS/seadrive-gui',
     ]
 
     files_to_sign = []
     for p in patterns:
-        files_to_sign.extend(glob.glob(join(appdir, p)))
+        files_to_sign.extend(_glob(p))
 
     info('{} files to sign'.format(len(files_to_sign)))
 
@@ -893,17 +913,20 @@ def unlock_keychain():
         _keychain_unlocked = True
         run('security -v unlock-keychain -p vagrant || true')
 
-def do_sign(path, extra_args=None):
+def do_sign(path, extra_args=None, preserve_entitlemenets=True):
     unlock_keychain()
     args = [
         'codesign',
         '--verbose=4',
+        '-o', 'runtime',
+        '--timestamp',
         '--verify',
         # '--no-strict',
         '--force',
-        '--preserve-metadata=entitlements',
         '-s', CERT_ID,
     ]
+    if preserve_entitlemenets:
+        args += ['--preserve-metadata=entitlements']
     extra_args = extra_args or []
     if extra_args:
         args.extend(extra_args)
@@ -988,6 +1011,16 @@ def copy_dmg():
     print '>>\t%s' % dst_dmg
     print '---------------------------------------------'
 
+def notarize_dmg():
+    pkg = os.path.join(conf[CONF_BUILDDIR], 'app-{}.dmg'.format(conf[CONF_VERSION]))
+    info('Try to notarize {}'.format(pkg))
+    notarize_script = join(Seafile().projdir, 'scripts/build/notarize.sh')
+    cmdline = '{} {}'.format(notarize_script, pkg)
+    ret = run(cmdline)
+    if ret != 0:
+        error('failed to notarize: %s' % cmdline)
+    info('Successfully notarized {}'.format(pkg))
+
 def build_and_sign_fsplugin():
     """
     Build and sign the fsplugin. The final output would be "${buildder}/Seafile FinderSync.appex"
@@ -1051,6 +1084,7 @@ def local_workflow():
 
     build_and_sign_fsplugin()
     gen_dmg()
+    notarize_dmg()
     copy_dmg()
 
 def master_workflow():
@@ -1060,6 +1094,7 @@ def master_workflow():
 
     build_and_sign_fsplugin()
     gen_dmg()
+    notarize_dmg()
     copy_dmg()
 
 def slave_workflow():
@@ -1094,8 +1129,9 @@ def main():
     if conf[CONF_LOCAL]:
         local_workflow()
     elif conf[CONF_MODE] == 'master':
-        info('entering master workflow')
-        master_workflow()
+        # info('entering master workflow')
+        # master_workflow()
+        local_workflow()
     else:
         info('entering slave workflow')
         slave_workflow()
